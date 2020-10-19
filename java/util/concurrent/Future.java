@@ -107,6 +107,10 @@ public interface Future<V> {
      * @return {@code false} if the task could not be cancelled,
      * typically because it has already completed normally;
      * {@code true} otherwise
+     *
+     * 取消任务，参数mayInterruptIfRunning为true时，如果要取消的任务正在执行，
+     * 会把执行这个任务的线程设为中断，为false时，正在执行的任务会被允许执行完成
+     *
      */
     boolean cancel(boolean mayInterruptIfRunning);
 
@@ -139,6 +143,8 @@ public interface Future<V> {
      * exception
      * @throws InterruptedException if the current thread was interrupted
      * while waiting
+     *
+     * 获取执行结果，如果任务执行中，会等到任务完成再返回
      */
     V get() throws InterruptedException, ExecutionException;
 

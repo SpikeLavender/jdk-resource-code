@@ -170,16 +170,18 @@ public class CountDownLatch {
             return getState();
         }
 
-        protected int tryAcquireShared(int acquires) {
+        protected int tryAcquireShared(int acquires) {  //sync类实现的AQS接口
             return (getState() == 0) ? 1 : -1;
         }
 
         protected boolean tryReleaseShared(int releases) {
             // Decrement count; signal when transition to zero
+            // 循环进行CAS，直到当前线程成功完成CAS使计数器（状态值state）减一并更新到state
             for (;;) {
                 int c = getState();
-                if (c == 0)
+                if (c == 0) //如果当前状态值为0则直接返回
                     return false;
+                // 使用CAS让计数器值减1
                 int nextc = c - 1;
                 if (compareAndSetState(c, nextc))
                     return nextc == 0;
@@ -289,7 +291,7 @@ public class CountDownLatch {
      * <p>If the current count equals zero then nothing happens.
      */
     public void countDown() {
-        sync.releaseShared(1);
+        sync.releaseShared(1);  //委托sync调用AQS的方法
     }
 
     /**

@@ -196,8 +196,12 @@ public class ScheduledThreadPoolExecutor
          * A positive value indicates fixed-rate execution.
          * A negative value indicates fixed-delay execution.
          * A value of 0 indicates a non-repeating (one-shot) task.
+         *
+         * 0    说明当前任务是一次性的，执行完毕后就退出了
+         * < 0  说明当前任务为 fixed-delay任务，是固定延迟的定时可重复执行任务
+         * > 0  说明当前任务为 fixed-rate任务，是固定频率的定时可重复执行任务
          */
-        private final long period;
+        private final long period;  //表示任务的类型
 
         /** The actual task to be re-enqueued by reExecutePeriodic */
         RunnableScheduledFuture<V> outerTask = this;
@@ -212,9 +216,9 @@ public class ScheduledThreadPoolExecutor
          */
         ScheduledFutureTask(Runnable r, V result, long triggerTime,
                             long sequenceNumber) {
-            super(r, result);
+            super(r, result); //调用父类FutureTask的构造函数
             this.time = triggerTime;
-            this.period = 0;
+            this.period = 0;    //为0, 说明为一次性任务
             this.sequenceNumber = sequenceNumber;
         }
 
@@ -241,10 +245,13 @@ public class ScheduledThreadPoolExecutor
             this.sequenceNumber = sequenceNumber;
         }
 
+        //元素过期算法，装饰后时间 - 当前时间，就是即将过期剩余时间
         public long getDelay(TimeUnit unit) {
             return unit.convert(time - System.nanoTime(), NANOSECONDS);
         }
 
+        // 作用是加入元素到延迟队列后，在内部建立或者调整堆时会使用该元素的compareTo方法与队列里面其他元素进行比较，
+        // 让最快要过期的元素放到队首，所以无论什么时候向队列里面添加元素，队首的元素都是最快要过期的元素
         public int compareTo(Delayed other) {
             if (other == this) // compare zero if same object
                 return 0;
@@ -269,7 +276,7 @@ public class ScheduledThreadPoolExecutor
          *
          * @return {@code true} if periodic
          */
-        public boolean isPeriodic() {
+        public boolean isPeriodic() {   //判断当前任务是一次性任务还是可重复执行的任务
             return period != 0;
         }
 
@@ -278,9 +285,9 @@ public class ScheduledThreadPoolExecutor
          */
         private void setNextRunTime() {
             long p = period;
-            if (p > 0)
+            if (p > 0)      // fixed-rate类型任务
                 time += p;
-            else
+            else            // fixed-delay类型任务
                 time = triggerTime(-p);
         }
 
@@ -298,13 +305,13 @@ public class ScheduledThreadPoolExecutor
          * Overrides FutureTask version so as to reset/requeue if periodic.
          */
         public void run() {
-            if (!canRunInCurrentRunState(this))
+            if (!canRunInCurrentRunState(this)) //取消任务
                 cancel(false);
-            else if (!isPeriodic())
+            else if (!isPeriodic()) //只执行一次，调用schedule方法的时候
                 super.run();
-            else if (super.runAndReset()) {
-                setNextRunTime();
-                reExecutePeriodic(outerTask);
+            else if (super.runAndReset()) { //定时执行
+                setNextRunTime(); // 设置 time = time + period，该任务下一次的执行时间
+                reExecutePeriodic(outerTask);   //重新加入该任务到delay队列
             }
         }
     }
@@ -313,7 +320,7 @@ public class ScheduledThreadPoolExecutor
      * Returns true if can run a task given current run state and
      * run-after-shutdown parameters.
      */
-    boolean canRunInCurrentRunState(RunnableScheduledFuture<?> task) {
+    boolean canRunInCurrentRunState(RunnableScheduledFuture<?> task) {  //判断当前任务是否应该被取消
         if (!isShutdown())
             return true;
         if (isStopped())
@@ -336,14 +343,16 @@ public class ScheduledThreadPoolExecutor
      * @param task the task
      */
     private void delayedExecute(RunnableScheduledFuture<?> task) {
+        //如果线程池关闭了，则执行线程池拒绝策略
         if (isShutdown())
             reject(task);
         else {
+            //添加任务到延迟队列
             super.getQueue().add(task);
-            if (!canRunInCurrentRunState(task) && remove(task))
+            if (!canRunInCurrentRunState(task) && remove(task)) //再次检查线程池状态
                 task.cancel(false);
             else
-                ensurePrestart();
+                ensurePrestart();   //确保至少一个线程在处理任务，即使核心线程数被设置为0
         }
     }
 
@@ -451,9 +460,9 @@ public class ScheduledThreadPoolExecutor
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      */
     public ScheduledThreadPoolExecutor(int corePoolSize) {
-        super(corePoolSize, Integer.MAX_VALUE,
+        super(corePoolSize, Integer.MAX_VALUE,  //调用父类ThreadPoolExecutor的构造函数
               DEFAULT_KEEPALIVE_MILLIS, MILLISECONDS,
-              new DelayedWorkQueue());
+              new DelayedWorkQueue());      //使用改造后的DelayedQueue
     }
 
     /**
@@ -553,12 +562,15 @@ public class ScheduledThreadPoolExecutor
     public ScheduledFuture<?> schedule(Runnable command,
                                        long delay,
                                        TimeUnit unit) {
+        //参数校验
         if (command == null || unit == null)
             throw new NullPointerException();
+        //任务转换
         RunnableScheduledFuture<Void> t = decorateTask(command,
             new ScheduledFutureTask<Void>(command, null,
                                           triggerTime(delay, unit),
                                           sequencer.getAndIncrement()));
+        //添加任务到延迟队列
         delayedExecute(t);
         return t;
     }
@@ -617,10 +629,12 @@ public class ScheduledThreadPoolExecutor
                                                   long initialDelay,
                                                   long period,
                                                   TimeUnit unit) {
+        //参数校验
         if (command == null || unit == null)
             throw new NullPointerException();
         if (period <= 0L)
             throw new IllegalArgumentException();
+        //装饰任务，注意period > 0，不是负的
         ScheduledFutureTask<Void> sft =
             new ScheduledFutureTask<Void>(command,
                                           null,
@@ -665,10 +679,12 @@ public class ScheduledThreadPoolExecutor
                                                      long initialDelay,
                                                      long delay,
                                                      TimeUnit unit) {
+        // 参数校验
         if (command == null || unit == null)
             throw new NullPointerException();
         if (delay <= 0L)
             throw new IllegalArgumentException();
+        // 任务转换，注意这里是 period = - delay < 0
         ScheduledFutureTask<Void> sft =
             new ScheduledFutureTask<Void>(command,
                                           null,
@@ -677,6 +693,7 @@ public class ScheduledThreadPoolExecutor
                                           sequencer.getAndIncrement());
         RunnableScheduledFuture<Void> t = decorateTask(command, sft);
         sft.outerTask = t;
+        //添加任务到队列
         delayedExecute(t);
         return t;
     }

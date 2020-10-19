@@ -153,7 +153,7 @@ public abstract class AbstractExecutorService implements ExecutorService {
         if (ntasks == 0)
             throw new IllegalArgumentException();
         ArrayList<Future<T>> futures = new ArrayList<>(ntasks);
-        ExecutorCompletionService<T> ecs =
+        ExecutorCompletionService<T> ecs =  // ExecutorCompletionService负责执行任务，后面调用poll返回第一个执行结果
             new ExecutorCompletionService<T>(this);
 
         // For efficiency, especially in executors with limited
@@ -170,27 +170,30 @@ public abstract class AbstractExecutorService implements ExecutorService {
             Iterator<? extends Callable<T>> it = tasks.iterator();
 
             // Start one task for sure; the rest incrementally
+            // 先提交一个任务
             futures.add(ecs.submit(it.next()));
             --ntasks;
             int active = 1;
 
             for (;;) {
-                Future<T> f = ecs.poll();
-                if (f == null) {
-                    if (ntasks > 0) {
+                Future<T> f = ecs.poll();   //尝试获取有没有执行结果（这个结果是立刻返回的）
+                if (f == null) {    //  没有执行结果
+                    if (ntasks > 0) {   //如果还有任务没有被提交执行的，就再提交一个任务
                         --ntasks;
                         futures.add(ecs.submit(it.next()));
                         ++active;
                     }
-                    else if (active == 0)
+                    else if (active == 0)   //没有任务在执行了，而且没有拿到一个成功的结果
                         break;
-                    else if (timed) {
-                        f = ecs.poll(nanos, NANOSECONDS);
+                    else if (timed) {   //如果设置了超时
+                        f = ecs.poll(nanos, NANOSECONDS);   //等待执行结果直到有结果或者超时
                         if (f == null)
                             throw new TimeoutException();
+                        // 这里的更新不可少，因为这个Future可能是执行失败的情况，
+                        // 那么还需要再次等待下一个结果，超时的设置还是需要用到。
                         nanos = deadline - System.nanoTime();
                     }
-                    else
+                    else    // 没有设置超时，并且所有任务都被提交了，则一直等到第一个执行结果出来
                         f = ecs.take();
                 }
                 if (f != null) {
@@ -210,7 +213,7 @@ public abstract class AbstractExecutorService implements ExecutorService {
             throw ee;
 
         } finally {
-            cancelAll(futures);
+            cancelAll(futures); // 尝试取消所有的任务（对于已经完成的任务没有影响）
         }
     }
 
@@ -266,18 +269,21 @@ public abstract class AbstractExecutorService implements ExecutorService {
         int j = 0;
         timedOut: try {
             for (Callable<T> t : tasks)
-                futures.add(newTaskFor(t));
+                futures.add(newTaskFor(t)); //为每个task生成包装对象
 
             final int size = futures.size();
 
             // Interleave time checks and calls to execute in case
             // executor doesn't have any/much parallelism.
+            // 循环调用execute执行每个方法
+            // 这里因为设置了超时时间，所以每次执行完成后
+            // 检查是否超时，超时了就直接返回future集合
             for (int i = 0; i < size; i++) {
                 if (((i == 0) ? nanos : deadline - System.nanoTime()) <= 0L)
                     break timedOut;
                 execute((Runnable)futures.get(i));
             }
-
+            // 等待每个任务执行完成
             for (; j < size; j++) {
                 Future<T> f = futures.get(j);
                 if (!f.isDone()) {

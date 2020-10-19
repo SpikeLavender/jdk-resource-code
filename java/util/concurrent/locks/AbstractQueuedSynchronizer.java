@@ -1524,12 +1524,18 @@ public abstract class AbstractQueuedSynchronizer
      * otherwise uninterpreted and can represent anything
      * you like.
      * @throws InterruptedException if the current thread is interrupted
+     *
+     * AQS获取共享资源时可被中断的方法
+     *
      */
     public final void acquireSharedInterruptibly(int arg)
             throws InterruptedException {
         if (Thread.interrupted())
-            throw new InterruptedException();
+            throw new InterruptedException();   //如果线程中断则抛出异常，清除中断标志
+        //查看当前计数器值是否为0，为0则直接返回，否则进入AQS的队列等待
+        //信号量中，调用Sync子类的方法尝试获取，这里根据构造函数确定使用公平策略
         if (tryAcquireShared(arg) < 0)
+            //如果获取失败则放入阻塞队列，然后再次尝试，如果失败则调用park方法挂起当前线程
             doAcquireSharedInterruptibly(arg);
     }
 
@@ -1567,8 +1573,9 @@ public abstract class AbstractQueuedSynchronizer
      * @return the value returned from {@link #tryReleaseShared}
      */
     public final boolean releaseShared(int arg) {
-        if (tryReleaseShared(arg)) {
-            doReleaseShared();
+        if (tryReleaseShared(arg)) {    //调用sync实现的tryReleaseShared，尝试释放资源
+            // 资源释放成功则调用park方法唤醒AQS队列里面最先挂起的线程
+            doReleaseShared();  //AQS的释放资源的方法
             return true;
         }
         return false;

@@ -133,5 +133,5 @@ public interface Executor {
      * accepted for execution
      * @throws NullPointerException if command is null
      */
-    void execute(Runnable command);
+    void execute(Runnable command); /**执行一个{@link Runnable}*/
 }

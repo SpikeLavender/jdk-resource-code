@@ -83,20 +83,20 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * states use cheaper ordered/lazy writes because values are unique
      * and cannot be further modified.
      *
-     * Possible state transitions:
-     * NEW -> COMPLETING -> NORMAL
-     * NEW -> COMPLETING -> EXCEPTIONAL
-     * NEW -> CANCELLED
-     * NEW -> INTERRUPTING -> INTERRUPTED
+     * Possible state transitions:          可能的任务状态转换路径
+     * NEW -> COMPLETING -> NORMAL          初始状态 -> 执行中 -> 正常结束
+     * NEW -> COMPLETING -> EXCEPTIONAL     初始状态 -> 执行中 -> 执行异常
+     * NEW -> CANCELLED                     初始状态 -> 任务取消
+     * NEW -> INTERRUPTING -> INTERRUPTED   初始状态 -> 被中断中 -> 被中断
      */
     private volatile int state;
-    private static final int NEW          = 0;
-    private static final int COMPLETING   = 1;
-    private static final int NORMAL       = 2;
-    private static final int EXCEPTIONAL  = 3;
-    private static final int CANCELLED    = 4;
-    private static final int INTERRUPTING = 5;
-    private static final int INTERRUPTED  = 6;
+    private static final int NEW          = 0;  //初始状态
+    private static final int COMPLETING   = 1;  //执行中状态
+    private static final int NORMAL       = 2;  //正常运行结束状态
+    private static final int EXCEPTIONAL  = 3;  //运行中异常
+    private static final int CANCELLED    = 4;  //任务被取消
+    private static final int INTERRUPTING = 5;  //任务正在被中断
+    private static final int INTERRUPTED  = 6;  //任务已经被中断
 
     /** The underlying callable; nulled out after running */
     private Callable<V> callable;
@@ -148,9 +148,9 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * {@code Future<?> f = new FutureTask<Void>(runnable, null)}
      * @throws NullPointerException if the runnable is null
      */
-    public FutureTask(Runnable runnable, V result) {
-        this.callable = Executors.callable(runnable, result);
-        this.state = NEW;       // ensure visibility of callable
+    public FutureTask(Runnable runnable, V result) {    //通过适配器将Runnable转化为Callable
+        this.callable = Executors.callable(runnable, result);   //将Runnable + result 封装成 Callable
+        this.state = NEW;       // ensure visibility of callable 设置当前任务状态为NEW
     }
 
     public boolean isCancelled() {
@@ -226,8 +226,10 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @param v the value
      */
     protected void set(V v) {
+        // 如果当前任务的状态为NEW，则设置为COMPLETING
         if (STATE.compareAndSet(this, NEW, COMPLETING)) {
             outcome = v;
+            // 设置当前任务的状态为NORMAL，也就是任务正常结束
             STATE.setRelease(this, NORMAL); // final state
             finishCompletion();
         }
@@ -244,20 +246,22 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @param t the cause of failure
      */
     protected void setException(Throwable t) {
+        // 如果当前任务的状态为NEW，则设置为COMPLETING
         if (STATE.compareAndSet(this, NEW, COMPLETING)) {
             outcome = t;
+            // 设置当前任务的状态为 EXCEPTIONAL，也就是任务非正常结束
             STATE.setRelease(this, EXCEPTIONAL); // final state
             finishCompletion();
         }
     }
 
     public void run() {
-        if (state != NEW ||
-            !RUNNER.compareAndSet(this, null, Thread.currentThread()))
+        if (state != NEW || //任务状态不是NEW，直接返回
+            !RUNNER.compareAndSet(this, null, Thread.currentThread())) //CAS设置当前任务持有者为当前线程失败则直接返回
             return;
-        try {
+        try {   //具体调用Callable的call方法执行任务
             Callable<V> c = callable;
-            if (c != null && state == NEW) {
+            if (c != null && state == NEW) {    //这里又一次判断是否为NEW，是为了避免在这个过程中其他线程修改了任务的状态(比如取消了该任务)
                 V result;
                 boolean ran;
                 try {
@@ -266,9 +270,9 @@ public class FutureTask<V> implements RunnableFuture<V> {
                 } catch (Throwable ex) {
                     result = null;
                     ran = false;
-                    setException(ex);
+                    setException(ex);   //任务执行失败
                 }
-                if (ran)
+                if (ran)    //任务执行成功
                     set(result);
             }
         } finally {
@@ -292,7 +296,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      *
      * @return {@code true} if successfully run and reset
      */
-    protected boolean runAndReset() {
+    protected boolean runAndReset() {   //任务正常执行完毕后不会设置任务的状态
         if (state != NEW ||
             !RUNNER.compareAndSet(this, null, Thread.currentThread()))
             return false;

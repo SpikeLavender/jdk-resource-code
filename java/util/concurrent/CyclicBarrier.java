@@ -179,7 +179,7 @@ public class CyclicBarrier {
         // signal completion of last generation
         trip.signalAll();   // 唤醒阻塞在屏障上的所有线程
         // set up next generation
-        count = parties;    // 重设count
+        count = parties;    // 重设count，重置CyclicBarrier
         generation = new Generation();  // 生成新的屏障
     }
 
@@ -212,6 +212,7 @@ public class CyclicBarrier {
                 throw new InterruptedException();
             }
             // 正在等待进入屏障的线程数量 -1
+            // 如果index==0则说明所有线程都到了屏障点，此时执行初始化时传递的任务
             int index = --count;
             if (index == 0) {  // tripped 所有线程都已经进入屏障了，该线程是最后一个进入屏障的
                 boolean ranAction = false;  // 执行任务的标识
@@ -220,6 +221,7 @@ public class CyclicBarrier {
                     if (command != null)
                         command.run();  // 执行任务
                     ranAction = true;   // 任务执行完毕
+                    // 激活其他因为调用await方法而被阻塞的线程，并重置CyclicBarrier
                     nextGeneration();   // 产生下一个屏障
                     return 0;
                 } finally {
@@ -229,11 +231,12 @@ public class CyclicBarrier {
             }
             // 不是最后一个到达屏障的线程
             // loop until tripped, broken, interrupted, or timed out
+            // 如果index != 0
             for (;;) {
                 try {
                     if (!timed)     // 没有设置等待时间
                         trip.await();   // 则一直进行等待
-                    else if (nanos > 0L)
+                    else if (nanos > 0L)    // 设置了超时时间
                         nanos = trip.awaitNanos(nanos); // 进行超时等待
                 } catch (InterruptedException ie) { // 在等待过程中发生中断异常，如果屏障没有结束，并且没有被破坏，那么破坏屏障
                     if (g == generation && ! g.broken) {

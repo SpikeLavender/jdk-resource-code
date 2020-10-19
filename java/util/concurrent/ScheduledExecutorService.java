@@ -160,6 +160,8 @@ public interface ScheduledExecutorService extends ExecutorService {
      *         scheduled for execution
      * @throws NullPointerException if command or unit is null
      * @throws IllegalArgumentException if period less than or equal to zero
+     *
+     *  等待一定时间initialDelay然后开始执行一个任务，每隔period参数设置的时间重复一次，（多线程执行）
      */
     public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
                                                   long initialDelay,
@@ -200,6 +202,9 @@ public interface ScheduledExecutorService extends ExecutorService {
      *         scheduled for execution
      * @throws NullPointerException if command or unit is null
      * @throws IllegalArgumentException if delay less than or equal to zero
+     *
+     * 等待一定时间initialDelay然后开始执行一个任务，完成后，等待delay参数设置的时间然后在执行一次任务。（单线程执行）
+     *
      */
     public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command,
                                                      long initialDelay,

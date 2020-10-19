@@ -182,8 +182,9 @@ public class Semaphore implements java.io.Serializable {
 
         final int nonfairTryAcquireShared(int acquires) {
             for (;;) {
-                int available = getState();
-                int remaining = available - acquires;
+                int available = getState(); // 获取当前信号量值
+                int remaining = available - acquires;   // 计算当前剩余值
+                // 如果当前剩余值小于0或者CAS设置成功则返回
                 if (remaining < 0 ||
                     compareAndSetState(available, remaining))
                     return remaining;
@@ -192,11 +193,11 @@ public class Semaphore implements java.io.Serializable {
 
         protected final boolean tryReleaseShared(int releases) {
             for (;;) {
-                int current = getState();
-                int next = current + releases;
-                if (next < current) // overflow
+                int current = getState();   // 获取当前信号量值
+                int next = current + releases;  // 将当前信号量值增加releases，这里为增加1
+                if (next < current) // overflow // 移除处理
                     throw new Error("Maximum permit count exceeded");
-                if (compareAndSetState(current, next))
+                if (compareAndSetState(current, next))  // 使用CAS保证更新信号量值的原子性
                     return true;
             }
         }
@@ -232,6 +233,7 @@ public class Semaphore implements java.io.Serializable {
         }
 
         protected int tryAcquireShared(int acquires) {
+            //如果获取失败则放入阻塞队列，然后再次尝试，如果失败则调用park方法挂起当前线程
             return nonfairTryAcquireShared(acquires);
         }
     }
@@ -315,7 +317,7 @@ public class Semaphore implements java.io.Serializable {
      * @throws InterruptedException if the current thread is interrupted
      */
     public void acquire() throws InterruptedException {
-        sync.acquireSharedInterruptibly(1);
+        sync.acquireSharedInterruptibly(1); // 传递参数为1，说明要获取1个信号量资源
     }
 
     /**
